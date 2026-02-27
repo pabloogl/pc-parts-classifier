@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PC Parts Classifier</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="app-card">
+            <header>
+                <h1>PC Parts Classifier</h1>
+                <p>Upload a photo of a PC component to identify it</p>
+            </header>
+
+            <div class="upload-area" id="drop-zone">
+                <span class="icon-upload">📸</span>
+                <p>Drag & drop or <span style="color: var(--primary); font-weight: 600;">click to browse</span></p>
+                <input type="file" id="file-input" accept="image/*">
+            </div>
+
+            <div id="preview-container">
+                <img id="image-preview" src="" alt="Preview">
+            </div>
+
+            <div class="actions">
+                <button id="classify-btn" disabled>Classify Component</button>
+            </div>
+
+            <div id="results">
+                <div class="main-result">
+                    <p style="font-size: 0.875rem; color: var(--text-dim);">Best Guess</p>
+                    <div class="main-label" id="best-guess">-</div>
+                </div>
+                <div id="other-results">
+                    <!-- Results will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const previewImg = document.getElementById('image-preview');
+        const previewContainer = document.getElementById('preview-container');
+        const classifyBtn = document.getElementById('classify-btn');
+        const resultsDiv = document.getElementById('results');
+        const mainLabel = document.getElementById('best-guess');
+        const otherResults = document.getElementById('other-results');
+
+        // Handle click to browse
+        dropZone.onclick = () => fileInput.click();
+
+        // Handle file selection
+        fileInput.onchange = (e) => handleFiles(e.target.files);
+
+        // Handle drag and drop
+        dropZone.ondragover = (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragging');
+        };
+
+        dropZone.ondragleave = () => dropZone.classList.remove('dragging');
+
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragging');
+            handleFiles(e.dataTransfer.files);
+        };
+
+        function handleFiles(files) {
+            if (files.length > 0) {
+                const file = files[0];
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewImg.src = e.target.result;
+                    previewContainer.style.display = 'block';
+                    classifyBtn.disabled = false;
+                    resultsDiv.style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        classifyBtn.onclick = async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            classifyBtn.disabled = true;
+            classifyBtn.textContent = 'Analyzing...';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                mainLabel.textContent = data.prediction;
+                
+                otherResults.innerHTML = '';
+                data.all_predictions.forEach(([label, conf]) => {
+                    const pct = (conf * 100).toFixed(1);
+                    otherResults.innerHTML += `
+                        <div class="prediction-item">
+                            <div style="width: 100%">
+                                <div style="display: flex; justify-content: space-between">
+                                    <span class="prediction-label">${label}</span>
+                                    <span style="color: var(--text-dim)">${pct}%</span>
+                                </div>
+                                <div class="confidence-bar-bg">
+                                    <div class="confidence-bar-fill" style="width: ${pct}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                resultsDiv.style.display = 'block';
+            } catch (error) {
+                console.error('Classification error:', error);
+                alert('Oops! Something went wrong.');
+            } finally {
+                classifyBtn.disabled = false;
+                classifyBtn.textContent = 'Classify Component';
+            }
+        };
+    </script>
+</body>
+</html>
